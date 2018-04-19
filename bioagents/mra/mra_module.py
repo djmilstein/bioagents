@@ -40,6 +40,7 @@ class MRA_Module(Bioagent):
         tell_content = content.head().upper()
         if tell_content == 'START-CONVERSATION':
             logger.info('MRA resetting')
+            # TODO: should something actually reset here?
 
     def receive_request(self, msg, content):
         """Handle request messages and respond.

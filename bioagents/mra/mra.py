@@ -11,6 +11,7 @@ import networkx
 import subprocess
 import kappy
 from indra.sources import trips
+from indra.sources.biopax.api import process_owl
 from indra.statements import Complex, Activation, IncreaseAmount, \
                             AddModification, stmts_from_json
 from indra.databases import uniprot_client
@@ -20,7 +21,8 @@ from pysb.bng import BngInterfaceError
 from pysb.tools import render_reactions
 from pysb.export import export
 from indra.util.kappa_util import im_json_to_graph, cm_json_to_graph
-
+import tempfile
+import shutil
 
 logger = logging.getLogger('MRA')
 
@@ -66,6 +68,25 @@ class MRA(object):
         res['model_exec'] = model_exec
         res['diagrams'] = make_diagrams(model_exec, model_id)
         return res
+
+    def replace_model_from_biopax(self, model_biopax):
+        """Replace the existing model with a model described by biopax."""
+        # Create a temporary directory
+        tmp_dir = tempfile.mkdtemp('bioagents')
+
+        # Put the biopax in a file within this temporary directory
+        fname = os.path.join(tmp_dir, 'tmp_biopax')
+        with open(fname, 'w') as f:
+            f.write(model_biopax)
+
+        # Process the biopax in this file
+        bp = process_owl(fname)
+
+        # Remove the directory
+        shutil.rmtree(tmp_dir)
+
+        # Set the processed statements as the current model
+        model_id = self.new_model(bp.statements)
 
     def build_model_from_json(self, model_json):
         """Build a model using INDRA JSON."""
