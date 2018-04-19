@@ -52,7 +52,8 @@ class Bioagent(KQMLModule):
                          (task, str(self.tasks)))
             reply_content = self.make_failure('UNKNOWN_TASK')
 
-        return self.reply_with_content(msg, reply_content)
+        if reply_content is not None:
+            return self.reply_with_content(msg, reply_content)
 
     def _respond_to(self, task, content):
         """Get the method to responsd to the task indicated by task."""

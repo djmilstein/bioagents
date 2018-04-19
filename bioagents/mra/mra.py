@@ -11,7 +11,7 @@ import networkx
 import subprocess
 import kappy
 from indra.sources import trips
-from indra.sources.biopax.api import process_owl
+from indra.sources.biopax.biopax_api import process_owl
 from indra.statements import Complex, Activation, IncreaseAmount, \
                             AddModification, stmts_from_json
 from indra.databases import uniprot_client
@@ -81,12 +81,21 @@ class MRA(object):
 
         # Process the biopax in this file
         bp = process_owl(fname)
+        stmts = bp.statements
 
         # Remove the directory
         shutil.rmtree(tmp_dir)
 
         # Set the processed statements as the current model
-        model_id = self.new_model(bp.statements)
+        model_id = self.new_model(stmts)
+        res = {'model_id': model_id,
+               'model': stmts}
+        if not stmts:
+            return res
+        model_exec = self.assemble_pysb(stmts)
+        res['model_exec'] = model_exec
+        res['diagrams'] = make_diagrams(model_exec, model_id)
+        return res
 
     def build_model_from_json(self, model_json):
         """Build a model using INDRA JSON."""

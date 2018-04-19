@@ -24,7 +24,7 @@ class MRA_Module(Bioagent):
     name = "MRA"
     tasks = ['BUILD-MODEL', 'EXPAND-MODEL', 'MODEL-HAS-MECHANISM',
              'MODEL-REPLACE-MECHANISM', 'MODEL-REMOVE-MECHANISM',
-             'MODEL-UNDO', 'MODEL-GET-UPSTREAM']
+             'MODEL-UNDO', 'MODEL-GET-UPSTREAM', 'REPLACE-MODEL']
 
     def __init__(self, **kwargs):
         # Instantiate a singleton MRA agent
@@ -34,6 +34,7 @@ class MRA_Module(Bioagent):
         except Exception as e:
             logger.warning('Could not load background information.')
             self.background_stmts = []
+        self.current_model = None
         super(MRA_Module, self).__init__(**kwargs)
 
     def receive_tell(self, msg, content):
@@ -62,6 +63,46 @@ class MRA_Module(Bioagent):
             reply_content = self.make_failure('INVALID_MODEL_ID')
         self.reply_with_content(msg, reply_content)
         return
+    
+    def respond_replace_model(self, content):
+        model_biopax = content.gets('description')
+        #with open('mra_log.txt', 'a') as f:
+        #    f.write('MOO:' + descr)
+        res = self.mra.replace_model_from_biopax(model_biopax)
+        model_id = res.get('model_id')
+        self.current_model = model_id
+
+        with open('mra_log.txt', 'w') as f:
+            f.write(model_biopax)
+            stmts = res.get('mod')
+            f.write('\n\nStatements:\n')
+            f.write(repr(stmts))
+
+        # Start a SUCCESS message
+        msg = KQMLPerformative('SUCCESS')
+        msg.set('model-id', str(model_id))
+        if False:
+            # Add the model id
+            # Add the INDRA model json
+            model = res.get('model')
+            if model:
+                self.send_background_support(model)
+            model_msg = encode_indra_stmts(model)
+            msg.sets('model', model_msg)
+            # Add the diagrams
+            diagrams = res.get('diagrams')
+            if not no_display:
+                if diagrams:
+                    rxn_diagram = diagrams.get('reactionnetwork')
+                    if rxn_diagram:
+                        msg.sets('diagram', rxn_diagram)
+                    self.send_display_model(diagrams)
+            ambiguities = res.get('ambiguities')
+            if ambiguities:
+                ambiguities_msg = get_ambiguities_msg(ambiguities)
+                msg.set('ambiguities', ambiguities_msg)
+        return None  # We are not sending a reply
+
 
     def respond_build_model(self, content):
         """Return response content to build-model request."""
@@ -78,6 +119,7 @@ class MRA_Module(Bioagent):
         if res.get('error'):
             raise InvalidModelDescriptionError(res.get('error'))
         model_id = res.get('model_id')
+        self.current_model = model_id
         if model_id is None:
             raise InvalidModelDescriptionError()
         # Start a SUCCESS message
@@ -121,6 +163,7 @@ class MRA_Module(Bioagent):
         except Exception as e:
             raise InvalidModelDescriptionError(e)
         new_model_id = res.get('model_id')
+        self.current_model = new_model_id
         if new_model_id is None:
             raise InvalidModelDescriptionError()
         # Start a SUCCESS message
@@ -156,6 +199,7 @@ class MRA_Module(Bioagent):
         res = self.mra.model_undo()
         no_display = content.get('no-display')
         new_model_id = res.get('model_id')
+        self.current_model = new_model_id
         # Start a SUCCESS message
         msg = KQMLPerformative('SUCCESS')
         # Add the model id
@@ -221,6 +265,7 @@ class MRA_Module(Bioagent):
         except Exception as e:
             raise InvalidModelDescriptionError(e)
         model_id = res.get('model_id')
+        self.current_model = model_id
         if model_id is None:
             raise InvalidModelDescriptionError('Could not find model id.')
         # Start a SUCCESS message
@@ -296,20 +341,25 @@ class MRA_Module(Bioagent):
                                                "the mechanism you added")
 
     def _get_model_id(self, content):
-        model_id_arg = content.get('model-id')
-        if model_id_arg is None:
-            logger.error('Model ID missing.')
+        if self.current_model is None:
+            logger.error('No current model')
             raise InvalidModelIdError
-        try:
-            model_id_str = model_id_arg.to_string()
-            model_id = int(model_id_str)
-        except Exception as e:
-            logger.error('Could not get model ID as integer.')
-            raise InvalidModelIdError(e)
-        if not self.mra.has_id(model_id):
-            logger.error('Model ID does not refer to an existing model.')
-            raise InvalidModelIdError
-        return model_id
+        else:
+            return self.current_model
+        #model_id_arg = content.get('model-id')
+        #if model_id_arg is None:
+        #    logger.error('Model ID missing.')
+        #    raise InvalidModelIdError
+        #try:
+        #    model_id_str = model_id_arg.to_string()
+        #    model_id = int(model_id_str)
+        #except Exception as e:
+        #    logger.error('Could not get model ID as integer.')
+        #    raise InvalidModelIdError(e)
+        #if not self.mra.has_id(model_id):
+        #    logger.error('Model ID does not refer to an existing model.')
+        #    raise InvalidModelIdError
+        #return model_id
 
 
 class InvalidModelDescriptionError(BioagentException):
